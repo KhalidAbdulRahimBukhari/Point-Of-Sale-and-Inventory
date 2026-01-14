@@ -1,24 +1,60 @@
+-- ============================================
+-- V010_Core_Essential_Indexes.sql
+-- PERFORMANCE ONLY — no constraints
+-- ============================================
 
---V010_Add_Initial_Indexes.sql
+BEGIN TRANSACTION;
+
+------------------------------------------------
+-- 1. Sales by Shop & Date
+------------------------------------------------
+DROP INDEX IF EXISTS IX_Sale_Shop_Date ON Sale;
+CREATE INDEX IX_Sale_Shop_Date
+ON Sale (ShopID, SaleDate DESC)
+INCLUDE (GrandTotal, Status, UserID);
+PRINT 'Created: IX_Sale_Shop_Date';
 
 
--- Sales
-CREATE INDEX IX_Sale_Shop_Date ON Sale (ShopID, SaleDate);
-CREATE INDEX IX_Sale_User ON Sale (UserID);
+------------------------------------------------
+-- 2. SaleItems by Sale
+------------------------------------------------
+DROP INDEX IF EXISTS IX_SaleItem_Sale ON SaleItem;
+CREATE INDEX IX_SaleItem_Sale
+ON SaleItem (SaleID)
+INCLUDE (VariantID, Quantity, UnitPriceAtSale, TotalPriceAtSale);
+PRINT 'Created: IX_SaleItem_Sale';
 
--- SaleItem
-CREATE INDEX IX_SaleItem_Sale ON SaleItem (SaleID);
-CREATE INDEX IX_SaleItem_Variant ON SaleItem (VariantID);
 
--- StockMovement
-CREATE INDEX IX_StockMovement_Variant_Date 
-ON StockMovement (VariantID, CreatedAt);
+------------------------------------------------
+-- 3. Stock Movements by Variant & Time
+------------------------------------------------
+DROP INDEX IF EXISTS IX_StockMovement_Variant_Date ON StockMovement;
+CREATE INDEX IX_StockMovement_Variant_Date
+ON StockMovement (VariantID, CreatedAt DESC);
+PRINT 'Created: IX_StockMovement_Variant_Date';
 
-CREATE INDEX IX_StockMovement_Shop_Date
-ON StockMovement (ShopID, CreatedAt);
 
--- Payment
-CREATE INDEX IX_Payment_Sale ON Payment (SaleID);
+------------------------------------------------
+-- 4. Payments by Sale
+------------------------------------------------
+DROP INDEX IF EXISTS IX_Payment_Sale ON Payment;
+CREATE INDEX IX_Payment_Sale
+ON Payment (SaleID)
+INCLUDE (Amount, PaymentMethod, Status);
+PRINT 'Created: IX_Payment_Sale';
 
--- Expense
-CREATE INDEX IX_Expense_Shop_Date ON Expense (ShopID, ExpenseDate);
+
+------------------------------------------------
+-- 5. Expenses by Shop & Date
+------------------------------------------------
+DROP INDEX IF EXISTS IX_Expense_Shop_Date ON Expense;
+CREATE INDEX IX_Expense_Shop_Date
+ON Expense (ShopID, ExpenseDate DESC)
+INCLUDE (Amount, ExpenseCategoryID);
+PRINT 'Created: IX_Expense_Shop_Date';
+
+
+INSERT INTO SchemaVersion (Version) VALUES (10);
+
+COMMIT;
+PRINT 'V010 performance indexes applied successfully';
