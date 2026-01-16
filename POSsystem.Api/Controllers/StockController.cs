@@ -1,113 +1,81 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using POSsystem.Api.Models;
 
-namespace POSsystem.Api.Controllers;
-
-[ApiController]
-[Route("api/stock")]
-public class StockController : ControllerBase
+namespace POSsystem.Api.Controllers
 {
-    private readonly PosDbContext _context;
-
-    public StockController(PosDbContext context)
-    {
-        _context = context;
-    }
-
     /// <summary>
-    /// Returns current stock for all active product variants.
-    /// Stock is derived from movements, not blindly trusted.
+    /// Read-only stock endpoints.
+    /// Requires authentication (JWT).
     /// </summary>
-    [HttpGet("variants")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<object>>> GetAllVariantStock()
+    [ApiController]
+    [Route("api/stock")]
+    [Authorize] // 🔒 JWT REQUIRED for all endpoints in this controller
+    public class StockController : ControllerBase
     {
-        var stock = await _context.ProductVariants
-            .Where(v => v.IsActive)
-            .Select(v => new
-            {
-                v.VariantId,
-                v.Barcode,
-                ProductName = v.Product.Name,
-                v.CurrentStock
-            })
-            .ToListAsync();
+        private readonly PosDbContext _context;
 
-        return Ok(stock);
-    }
+        public StockController(PosDbContext context)
+        {
+            _context = context;
+        }
 
-    /// <summary>
-    /// Returns stock and movement history for a single variant.
-    /// </summary>
-    /// <param name="variantId">Variant ID</param>
-    [HttpGet("variants/{variantId:int}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<object>> GetVariantStock(int variantId)
-    {
-        var variant = await _context.ProductVariants
-            .Where(v => v.VariantId == variantId)
-            .Select(v => new
-            {
-                v.VariantId,
-                v.Barcode,
-                ProductName = v.Product.Name,
-                v.CurrentStock
-            })
-            .FirstOrDefaultAsync();
+        /// <summary>
+        /// Get current stock for all product variants in a shop.
+        /// Used for inventory overview.
+        /// </summary>
+        /// <param name="shopId">Shop identifier</param>
+        [HttpGet("current/{shopId}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<IEnumerable<object>>> GetCurrentStock(int shopId)
+        {
+            var stock = await _context.ProductVariants
+                .Where(v => v.ShopId == shopId && v.IsActive)
+                .Select(v => new
+                {
+                    v.VariantId,
+                    ProductName = v.Product.Name,
+                    v.Sku,
+                    v.Barcode,
+                    v.CurrentStock
+                })
+                .ToListAsync();
 
-        if (variant == null)
-            return NotFound("Variant not found");
+            if (!stock.Any())
+                return NotFound("No stock found for this shop");
 
-        return Ok(variant);
-    }
+            return Ok(stock);
+        }
 
-    /// <summary>
-    /// Returns stock movement ledger for a variant.
-    /// This is the source of truth.
-    /// </summary>
-    /// <param name="variantId">Variant ID</param>
-    [HttpGet("variants/{variantId:int}/movements")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<object>>> GetVariantMovements(int variantId)
-    {
-        var movements = await _context.StockMovements
-            .Where(m => m.VariantId == variantId)
-            .OrderBy(m => m.CreatedAt)
-            .Select(m => new
-            {
-                m.StockMovementId,
-                m.MovementType,
-                m.QuantityChange,
-                m.ReferenceId,
-                m.CreatedAt
-            })
-            .ToListAsync();
+        /// <summary>
+        /// Get stock movement history for a specific variant.
+        /// Used for auditing and reconciliation.
+        /// </summary>
+        /// <param name="variantId">Product variant ID</param>
+        [HttpGet("movements/{variantId}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<IEnumerable<object>>> GetStockMovements(int variantId)
+        {
+            var movements = await _context.StockMovements
+                .Where(m => m.VariantId == variantId)
+                .OrderByDescending(m => m.CreatedAt)
+                .Select(m => new
+                {
+                    m.StockMovementId,
+                    m.MovementType,
+                    m.QuantityChange,
+                    m.ReferenceId,
+                    m.CreatedAt
+                })
+                .ToListAsync();
 
-        return Ok(movements);
-    }
+            if (!movements.Any())
+                return NotFound("No stock movements found");
 
-    /// <summary>
-    /// Verifies stock consistency by comparing
-    /// SUM(movements) vs stored CurrentStock.
-    /// </summary>
-    [HttpGet("audit")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<object>>> AuditStock()
-    {
-        var audit = await _context.ProductVariants
-            .Select(v => new
-            {
-                v.VariantId,
-                v.Barcode,
-                StoredStock = v.CurrentStock,
-                CalculatedStock = _context.StockMovements
-                    .Where(m => m.VariantId == v.VariantId)
-                    .Sum(m => m.QuantityChange)
-            })
-            .ToListAsync();
-
-        return Ok(audit);
+            return Ok(movements);
+        }
     }
 }
