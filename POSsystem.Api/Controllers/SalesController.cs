@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using POSsystem.Api.DTOs;
 using POSsystem.Api.Models;
 
 [ApiController]
@@ -60,6 +61,7 @@ public class SaleController : ControllerBase
             {
                 s.SaleId,
                 s.InvoiceNumber,
+                s.SaleItems,
                 s.SaleDate,
                 s.SubTotal,
                 s.SaleDiscount,
@@ -115,13 +117,172 @@ public class SaleController : ControllerBase
 
     // 4️⃣ Create a new sale
     // POST: api/sales
-    // NOTE: Transaction + stock + payment handled here (later)
+    // NOTE: Transaction + stock + payment handled here
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
-    public IActionResult CreateSale()
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateSale([FromBody] CreateSaleDto dto)
     {
-        // Placeholder – real implementation comes next
-        return StatusCode(StatusCodes.Status501NotImplemented,
-            "Sale creation logic not implemented yet");
+        if (dto.Items == null || !dto.Items.Any())
+            return BadRequest("Sale must contain at least one item");
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+
+        try
+        {
+            // 1️⃣ Generate invoice number (MVP-safe, not concurrency-safe)
+            var today = DateTime.UtcNow.Date;
+            var countToday = await _context.Sales.CountAsync(s => s.SaleDate.Date == today);
+            var invoiceNumber = $"INV-{today:yyyyMMdd}-{(countToday + 1):D6}";
+
+            var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+            var username = User.Identity!.Name ?? "system";
+
+            // 2️⃣ Create Sale header
+            var sale = new Sale
+            {
+                InvoiceNumber = invoiceNumber,
+                SaleDate = DateTime.UtcNow,
+                Status = "COMPLETED",
+                UserId = userId,
+                SubTotal = 0,
+                TaxTotal = 0,
+                SaleDiscount = dto.SaleDiscount,
+                GrandTotal = 0,
+                Notes = dto.Notes
+            };
+
+            _context.Sales.Add(sale);
+            await _context.SaveChangesAsync(); // get SaleId
+
+            decimal subTotal = 0;
+            decimal taxTotal = 0;
+            const decimal TAX_RATE = 0.15m;
+
+            // 3️⃣ Process sale items
+            foreach (var item in dto.Items)
+            {
+                if (item.Quantity <= 0)
+                    throw new Exception("Invalid quantity");
+
+                if (string.IsNullOrWhiteSpace(item.Barcode) && string.IsNullOrWhiteSpace(item.SKU))
+                    throw new Exception("Barcode or SKU is required");
+
+                var variant = await _context.ProductVariants
+                    .Include(v => v.Product)
+                    .Include(v => v.Shop)
+                    .FirstOrDefaultAsync(v =>
+                        (!string.IsNullOrEmpty(item.Barcode) && v.Barcode == item.Barcode) ||
+                        (!string.IsNullOrEmpty(item.SKU) && v.Sku == item.SKU));
+
+                if (variant == null)
+                    throw new Exception("Product variant not found");
+
+                if (variant.CurrentStock < item.Quantity)
+                    throw new Exception("Insufficient stock");
+
+                if (variant.SellingPrice <= 0)
+                    throw new Exception("Invalid selling price");
+
+                var lineTotal = variant.SellingPrice * item.Quantity;
+                var lineTax = lineTotal * TAX_RATE;
+
+                subTotal += lineTotal;
+                taxTotal += lineTax;
+
+                // SaleItem snapshot
+                var saleItem = new SaleItem
+                {
+                    SaleId = sale.SaleId,
+                    VariantId = variant.VariantId,
+                    ShopId = variant.ShopId,
+
+                    ProductNameAtSale = variant.Product.Name,
+                    VariantDescriptionAtSale = variant.Notes,
+
+                    Quantity = item.Quantity,
+                    UnitPriceAtSale = variant.SellingPrice,
+                    TotalPriceAtSale = lineTotal,
+
+                    UnitCostAtSale = variant.CostPrice,
+                    TotalCostAtSale = variant.CostPrice * item.Quantity,
+
+                    TaxRateAtSale = TAX_RATE,
+                    TaxAmountAtSale = lineTax,
+
+                    CurrencyCode = variant.Shop.CurrencyCode,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.SaleItems.Add(saleItem);
+
+                // Stock movement (SALE)
+                var stockMovement = new StockMovement
+                {
+                    VariantId = variant.VariantId,
+                    ShopId = variant.ShopId,
+                    QuantityChange = -item.Quantity,
+                    MovementTypeId = 1, // SALE
+                    ReferenceId = sale.SaleId,
+                    CreatedByUserId = userId,
+                    CreatedByUsername = username,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.StockMovements.Add(stockMovement);
+
+                // Update stock snapshot
+                variant.CurrentStock -= item.Quantity;
+            }
+
+            // 4️⃣ Validate discount
+            if (dto.SaleDiscount < 0)
+                throw new Exception("Invalid discount");
+
+            if (dto.SaleDiscount > subTotal)
+                throw new Exception("Discount exceeds subtotal");
+
+            // 5️⃣ Final totals
+            sale.SubTotal = subTotal;
+            sale.TaxTotal = taxTotal;
+            sale.GrandTotal = subTotal + taxTotal - dto.SaleDiscount;
+
+            _context.Sales.Update(sale);
+
+            // 6️⃣ Payment (no partial payments in MVP)
+            if (dto.PaidAmount != sale.GrandTotal)
+                throw new Exception("Full payment is required");
+
+            var payment = new Payment
+            {
+                SaleId = sale.SaleId,
+                Amount = dto.PaidAmount,
+                PaymentMethod = dto.PaymentMethod,
+                Status = "PAID",
+                PaymentDate = DateTime.UtcNow
+            };
+
+            _context.Payments.Add(payment);
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return CreatedAtAction(nameof(GetSaleDetails), new { id = sale.SaleId }, new
+            {
+                sale.SaleId,
+                sale.InvoiceNumber,
+                sale.SubTotal,
+                sale.TaxTotal,
+                sale.SaleDiscount,
+                sale.GrandTotal,
+                PaymentStatus = payment.Status
+            });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            return BadRequest(ex.Message);
+        }
     }
+
 }
