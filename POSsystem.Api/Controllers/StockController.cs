@@ -11,7 +11,7 @@ namespace POSsystem.Api.Controllers
     /// </summary>
     [ApiController]
     [Route("api/stock")]
-    [Authorize] // 🔒 JWT REQUIRED for all endpoints in this controller
+    [Authorize(Roles = "Admin,Cashier")] // 🔒 JWT REQUIRED for all endpoints in this controller
     public class StockController : ControllerBase
     {
         private readonly PosDbContext _context;
