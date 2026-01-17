@@ -22,10 +22,10 @@ public partial class ReturnItem
     public int QuantityReturned { get; set; }
 
     [Column(TypeName = "decimal(12, 2)")]
-    public decimal UnitPriceAtReturn { get; set; }
+    public decimal RefundAmount { get; set; }
 
     [Column(TypeName = "decimal(12, 2)")]
-    public decimal TaxAmountAtReturn { get; set; }
+    public decimal TaxRefundAmount { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

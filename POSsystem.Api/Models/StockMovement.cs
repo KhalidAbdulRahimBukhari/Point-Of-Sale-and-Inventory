@@ -25,9 +25,6 @@ public partial class StockMovement
 
     public int QuantityChange { get; set; }
 
-    [Column(TypeName = "decimal(12, 2)")]
-    public decimal UnitCost { get; set; }
-
     [Column("ReferenceID")]
     public int? ReferenceId { get; set; }
 

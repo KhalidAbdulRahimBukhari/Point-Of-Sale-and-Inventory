@@ -29,6 +29,12 @@ public partial class SaleReturn
 
     public DateTime CreatedAt { get; set; }
 
+    [Column(TypeName = "decimal(18, 2)")]
+    public decimal TotalRefundAmount { get; set; }
+
+    [StringLength(20)]
+    public string ReturnType { get; set; } = null!;
+
     [InverseProperty("SaleReturn")]
     public virtual ICollection<ReturnItem> ReturnItems { get; set; } = new List<ReturnItem>();
 

@@ -40,9 +40,6 @@ public partial class SaleItem
     [Column(TypeName = "decimal(12, 2)")]
     public decimal TotalCostAtSale { get; set; }
 
-    [Column(TypeName = "decimal(12, 2)")]
-    public decimal ItemDiscountAmount { get; set; }
-
     [Column(TypeName = "decimal(5, 2)")]
     public decimal TaxRateAtSale { get; set; }
 
