@@ -8,7 +8,7 @@ namespace POSsystem.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
-[Authorize(Roles = "Admin")]
+
 public class UserController : ControllerBase
 {
     private readonly PosDbContext _context;
@@ -87,6 +87,14 @@ public class UserController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
     {
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(dto.UserName) ||
+            string.IsNullOrWhiteSpace(dto.Password) ||
+            string.IsNullOrWhiteSpace(dto.FullName))
+        {
+            return BadRequest("Username, Password, and FullName are required");
+        }
+
         // Username uniqueness
         if (await _context.Users.AnyAsync(u => u.UserName == dto.UserName))
             return BadRequest("Username already exists");
@@ -95,24 +103,31 @@ public class UserController : ControllerBase
 
         try
         {
+            // Create person with proper null handling for nullable fields
             var person = new Person
             {
                 FullName = dto.FullName,
-                Email = dto.Email,
-                Phone = dto.Phone,
+                NationalNumber = !string.IsNullOrWhiteSpace(dto.NationalNumber) ? dto.NationalNumber : null,
+                Email = !string.IsNullOrWhiteSpace(dto.Email) ? dto.Email : null,
+                DateOfBirth = dto.DateOfBirth.HasValue ? dto.DateOfBirth.Value : null,
+                CountryId = dto.CountryID.HasValue ? dto.CountryID.Value : null,
+                Gender = !string.IsNullOrWhiteSpace(dto.Gender) ? dto.Gender : null,
+                Phone = !string.IsNullOrWhiteSpace(dto.Phone) ? dto.Phone : null,
+                ImagePath = !string.IsNullOrWhiteSpace(dto.ImagePath) ? dto.ImagePath : null,
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.People.Add(person);
             await _context.SaveChangesAsync();
 
+            // Create user with fixed ShopId = 1
             var user = new User
             {
-                PersonId = person.PersonId,
+                PersonId = person.PersonId, // Note: Make sure PersonID property name matches your Person entity
                 UserName = dto.UserName,
                 Password = dto.Password, // TEMP: plaintext (MVP)
-                RoleId = dto.RoleId,
-                ShopId = dto.ShopId,
+                RoleId = dto.RoleId, // Make sure RoleId is provided in the DTO
+                ShopId = 1, // Fixed to 1 as requested
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -125,30 +140,50 @@ public class UserController : ControllerBase
             return CreatedAtAction(nameof(GetUser), new { id = user.UserId }, new
             {
                 user.UserId,
-                user.UserName
+                user.UserName,
+                PersonId = person.PersonId
             });
         }
-        catch
+        catch (Exception ex)
         {
             await tx.RollbackAsync();
-            return BadRequest("Failed to create user");
+            // Log the exception here (ex)
+            return BadRequest("Failed to create user" + ex.Message);
         }
     }
 
     /// <summary>
     /// Soft delete user (set inactive).
     /// </summary>
-    [HttpDelete("{id:int}")]
+    /// <summary>
+    /// Deactivate user (soft delete).
+    /// </summary>
+    [HttpPut("{id:int}/deactivate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateUser(int id)
     {
         var user = await _context.Users.FindAsync(id);
-
-        if (user == null)
-            return NotFound();
+        if (user == null) return NotFound();
 
         user.IsActive = false;
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Reactivate user.
+    /// </summary>
+    [HttpPut("{id:int}/activate")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ActivateUser(int id)
+    {
+        var user = await _context.Users.FindAsync(id);
+        if (user == null) return NotFound();
+
+        user.IsActive = true;
         await _context.SaveChangesAsync();
 
         return NoContent();
