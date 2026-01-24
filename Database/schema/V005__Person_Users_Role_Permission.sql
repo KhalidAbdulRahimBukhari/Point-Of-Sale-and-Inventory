@@ -29,8 +29,6 @@ CREATE TABLE Person (
 
     CreatedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
 
-    CONSTRAINT UQ_Person_NationalNumber
-        UNIQUE (NationalNumber),
 
     CONSTRAINT FK_Person_Country
         FOREIGN KEY (CountryID) REFERENCES Country(CountryID)
