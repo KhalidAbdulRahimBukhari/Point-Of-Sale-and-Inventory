@@ -8,7 +8,7 @@ namespace POSsystem.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
-
+[Authorize(Roles = "Admin,Cashier")]
 public class UserController : ControllerBase
 {
     private readonly PosDbContext _context;
@@ -161,10 +161,14 @@ public class UserController : ControllerBase
     [HttpPut("{id:int}/deactivate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeactivateUser(int id)
     {
         var user = await _context.Users.FindAsync(id);
         if (user == null) return NotFound();
+
+        if (user.UserId == 1)
+            return StatusCode(403, "Cannot deactivate the primary admin user");
 
         user.IsActive = false;
         await _context.SaveChangesAsync();
