@@ -85,6 +85,7 @@ CREATE TABLE Payment (
     SaleID INT NOT NULL,
 
     Amount DECIMAL(12,2) NOT NULL,
+    Change DECIMAL(12,2) NOT NULL,
     CurrencyCode CHAR(3) NOT NULL,
 
     PaymentMethod NVARCHAR(50) NOT NULL,
