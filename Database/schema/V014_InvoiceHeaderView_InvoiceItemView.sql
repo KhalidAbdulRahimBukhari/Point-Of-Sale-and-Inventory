@@ -16,8 +16,8 @@ SELECT
     ISNULL(p.PaymentMethod, '') AS PaymentMethod
 FROM Sale s
 JOIN [Users] u ON u.UserID = s.UserID
-JOIN Payment p ON p.SaleID = s.SaleID;
-
+LEFT JOIN Payment p ON p.SaleID = s.SaleID
+go
 
 CREATE VIEW InvoiceItemView AS
 SELECT
