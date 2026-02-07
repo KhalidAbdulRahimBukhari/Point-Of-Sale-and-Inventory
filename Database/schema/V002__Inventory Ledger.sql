@@ -41,14 +41,7 @@ CREATE TABLE StockMovement (
         CHECK (QuantityChange <> 0),
 );
 
--------------------------------------------------
--- Seed movement types (V1)
--------------------------------------------------
-INSERT INTO MovementType (Code, Description) VALUES
-('SALE',        'Stock decrease due to sale'),
-('RETURN',      'Stock increase due to return'),
-('PURCHASE',    'Stock increase due to purchase'),
-('ADJUSTMENT',  'Manual stock adjustment');
+
 
 -------------------------------------------------
 -- Schema Version
