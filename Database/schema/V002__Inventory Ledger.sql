@@ -19,7 +19,6 @@ CREATE TABLE StockMovement (
     MovementTypeID INT NOT NULL,
 
     QuantityChange INT NOT NULL,          -- +in / -out
-    UnitCost DECIMAL(12,2) NOT NULL,      -- cost at time of movement
 
     ReferenceID INT NULL,                 -- SaleID, ReturnID, etc.
     Reason NVARCHAR(300) NULL,            -- REQUIRED for adjustments (enforced in app)
