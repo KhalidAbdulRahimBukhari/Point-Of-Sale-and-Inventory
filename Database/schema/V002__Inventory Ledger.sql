@@ -39,9 +39,6 @@ CREATE TABLE StockMovement (
 
     CONSTRAINT CK_StockMovement_Quantity
         CHECK (QuantityChange <> 0),
-
-    CONSTRAINT CK_StockMovement_UnitCost
-        CHECK (UnitCost >= 0)
 );
 
 -------------------------------------------------
