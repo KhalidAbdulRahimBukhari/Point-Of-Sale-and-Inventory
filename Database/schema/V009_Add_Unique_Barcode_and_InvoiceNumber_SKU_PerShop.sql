@@ -2,10 +2,6 @@
 
 BEGIN TRANSACTION;
 
--- Barcode must be unique per shop
-ALTER TABLE ProductVariant
-ADD CONSTRAINT UQ_ProductVariant_Shop_Barcode
-    UNIQUE (ShopID, Barcode);
 
 -- Invoice number must be unique per shop
 ALTER TABLE Sale
