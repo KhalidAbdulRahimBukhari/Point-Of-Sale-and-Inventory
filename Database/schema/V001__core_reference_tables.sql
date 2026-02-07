@@ -41,9 +41,6 @@ CREATE TABLE Category (
 
     CONSTRAINT FK_Category_Shop
         FOREIGN KEY (ShopID) REFERENCES Shop(ShopID),
-
-    CONSTRAINT UQ_Category_Shop_Name
-        UNIQUE (ShopID, Name)
 );
 
 -------------------------------------------------
@@ -100,8 +97,6 @@ CREATE TABLE ProductVariant (
     CONSTRAINT FK_ProductVariant_Product
         FOREIGN KEY (ProductID) REFERENCES Product(ProductID),
 
-    CONSTRAINT UQ_ProductVariant_Product_Size_Color
-        UNIQUE (ProductID, Size, Color),
 
     CONSTRAINT CK_ProductVariant_Prices
         CHECK (SellingPrice >= 0 AND CostPrice >= 0)
