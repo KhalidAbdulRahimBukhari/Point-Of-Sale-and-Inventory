@@ -47,7 +47,7 @@ CREATE TABLE SaleItem (
     UnitCostAtSale DECIMAL(12,2) NOT NULL,
     TotalCostAtSale DECIMAL(12,2) NOT NULL,
 
-    ItemDiscountAmount DECIMAL(12,2) NOT NULL DEFAULT 0,
+
     TaxRateAtSale DECIMAL(5,2) NOT NULL DEFAULT 0,
     TaxAmountAtSale DECIMAL(12,2) NOT NULL DEFAULT 0,
 
