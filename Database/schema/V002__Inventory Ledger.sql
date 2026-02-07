@@ -5,7 +5,6 @@ BEGIN TRANSACTION;
 -------------------------------------------------
 CREATE TABLE MovementType (
     MovementTypeID INT IDENTITY PRIMARY KEY,
-    Code NVARCHAR(50) NOT NULL UNIQUE,   -- SALE, RETURN, ADJUSTMENT, PURCHASE
     Description NVARCHAR(200) NULL
 );
 
