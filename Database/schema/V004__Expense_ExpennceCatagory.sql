@@ -8,8 +8,6 @@ CREATE TABLE ExpenseCategory (
 
     Name NVARCHAR(200) NOT NULL,
 
-    CONSTRAINT UQ_ExpenseCategory_Name
-        UNIQUE (Name)
 );
 
 -------------------------------------------------
