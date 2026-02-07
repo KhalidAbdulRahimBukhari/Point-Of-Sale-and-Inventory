@@ -51,12 +51,28 @@ public partial class PosDbContext : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
+    public virtual DbSet<InvoiceHeaderView> InvoiceHeaderView { get; set; } = null!;
+    public virtual DbSet<InvoiceItemView> InvoiceItemView { get; set; } = null!;
+
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=.;Database=Fawasel;Trusted_Connection=True;TrustServerCertificate=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<InvoiceHeaderView>(entity =>
+        {
+            entity.HasNoKey();
+            entity.ToView("InvoiceHeaderView");
+        });
+
+        modelBuilder.Entity<InvoiceItemView>(entity =>
+        {
+            entity.HasNoKey();
+            entity.ToView("InvoiceItemView");
+        });
+
         modelBuilder.Entity<Category>(entity =>
         {
             entity.HasKey(e => e.CategoryId).HasName("PK__Category__19093A2B81E304FF");
@@ -305,6 +321,8 @@ public partial class PosDbContext : DbContext
         });
 
         OnModelCreatingPartial(modelBuilder);
+
+
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
