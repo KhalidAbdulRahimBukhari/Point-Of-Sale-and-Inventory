@@ -25,6 +25,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+
 builder.Services.AddAuthorization();
 
 builder.Services.AddControllers();
@@ -72,8 +73,22 @@ builder.Services.AddDbContext<PosDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("PosDb")));
 
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowVite",
+        builder => builder
+            .WithOrigins("http://localhost:5174") // Vite dev server
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials());
+});
+
+// Add to middleware (BEFORE UseAuthorization)
+
 var app = builder.Build();
 
+app.UseCors("AllowVite");
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {

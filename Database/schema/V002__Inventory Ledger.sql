@@ -5,7 +5,6 @@ BEGIN TRANSACTION;
 -------------------------------------------------
 CREATE TABLE MovementType (
     MovementTypeID INT IDENTITY PRIMARY KEY,
-    Code NVARCHAR(50) NOT NULL UNIQUE,   -- SALE, RETURN, ADJUSTMENT, PURCHASE
     Description NVARCHAR(200) NULL
 );
 
@@ -20,7 +19,6 @@ CREATE TABLE StockMovement (
     MovementTypeID INT NOT NULL,
 
     QuantityChange INT NOT NULL,          -- +in / -out
-    UnitCost DECIMAL(12,2) NOT NULL,      -- cost at time of movement
 
     ReferenceID INT NULL,                 -- SaleID, ReturnID, etc.
     Reason NVARCHAR(300) NULL,            -- REQUIRED for adjustments (enforced in app)
@@ -41,19 +39,9 @@ CREATE TABLE StockMovement (
 
     CONSTRAINT CK_StockMovement_Quantity
         CHECK (QuantityChange <> 0),
-
-    CONSTRAINT CK_StockMovement_UnitCost
-        CHECK (UnitCost >= 0)
 );
 
--------------------------------------------------
--- Seed movement types (V1)
--------------------------------------------------
-INSERT INTO MovementType (Code, Description) VALUES
-('SALE',        'Stock decrease due to sale'),
-('RETURN',      'Stock increase due to return'),
-('PURCHASE',    'Stock increase due to purchase'),
-('ADJUSTMENT',  'Manual stock adjustment');
+
 
 -------------------------------------------------
 -- Schema Version

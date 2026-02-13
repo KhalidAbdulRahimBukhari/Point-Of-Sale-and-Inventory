@@ -20,6 +20,9 @@ public partial class Payment
     [Column(TypeName = "decimal(12, 2)")]
     public decimal Amount { get; set; }
 
+    [Column(TypeName = "decimal(12, 2)")]
+    public decimal Change { get; set; }
+
     [StringLength(3)]
     [Unicode(false)]
     public string CurrencyCode { get; set; } = null!;
