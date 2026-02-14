@@ -14,6 +14,12 @@ const theme = createTheme({
       default: "#f5f5f5",
     },
   },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+  shape: {
+    borderRadius: 12,
+  },
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
