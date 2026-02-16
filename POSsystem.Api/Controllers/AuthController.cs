@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Identity;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -13,22 +14,15 @@ public class AuthController : ControllerBase
 {
     private readonly IConfiguration _config;
     private readonly PosDbContext _context;
+    private readonly PasswordHasher<User> _passwordHasher;
 
     public AuthController(IConfiguration config, PosDbContext context)
     {
         _config = config;
         _context = context;
+        _passwordHasher = new PasswordHasher<User>();
     }
 
-    /// <summary>
-    /// Authenticates a user and returns a JWT token.
-    /// </summary>
-    /// <param name="loginDto">User login credentials.</param>
-    /// <returns>JWT token and user information.</returns>
-    /// <response code="200">Login successful.</response>
-    /// <response code="400">Invalid request data.</response>
-    /// <response code="401">Invalid credentials or inactive account.</response>
-    /// <response code="500">Internal server error.</response>
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -46,15 +40,19 @@ public class AuthController : ControllerBase
         try
         {
             var user = await _context.Users
-                .AsNoTracking()
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.UserName == loginDto.Username);
 
             if (user == null)
                 return Unauthorized("Invalid credentials.");
 
-            // Plain text password comparison (MVP only)
-            if (user.Password != loginDto.Password)
+            var result = _passwordHasher.VerifyHashedPassword(
+                user,
+                user.Password,
+                loginDto.Password
+            );
+
+            if (result == PasswordVerificationResult.Failed)
                 return Unauthorized("Invalid credentials.");
 
             if (!user.IsActive)
