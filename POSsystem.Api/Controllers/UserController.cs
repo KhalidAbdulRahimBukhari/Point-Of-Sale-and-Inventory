@@ -8,9 +8,10 @@ namespace POSsystem.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
-[Authorize(Roles = "Admin,Cashier")]
+[Authorize(Roles = "Admin")]
 public class UserController : ControllerBase
 {
+    private const int SHOP_ID = 1;
     private readonly PosDbContext _context;
 
     public UserController(PosDbContext context)
@@ -18,58 +19,53 @@ public class UserController : ControllerBase
         _context = context;
     }
 
-    /// <summary>
-    /// Get all users (admin only).
-    /// </summary>
+    // -------------------- GET ALL USERS --------------------
+
     [HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<object>>> GetUsers()
+    [ProducesResponseType(typeof(List<UserResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<List<UserResponseDto>>> GetUsers()
     {
         var users = await _context.Users
-            .Include(u => u.Person)
-            .Include(u => u.Role)
-            .Select(u => new
+            .AsNoTracking()
+            .Where(u => u.ShopId == SHOP_ID)
+            .Select(u => new UserResponseDto
             {
-                u.UserId,
-                u.UserName,
-                u.IsActive,
+                UserId = u.UserId,
+                UserName = u.UserName,
+                IsActive = u.IsActive,
                 Role = u.Role.RoleName,
-                Person = new
-                {
-                    u.Person.FullName,
-                    u.Person.Email,
-                    u.Person.Phone
-                }
+                FullName = u.Person.FullName,
+                Email = u.Person.Email,
+                Phone = u.Person.Phone
             })
             .ToListAsync();
 
         return Ok(users);
     }
 
-    /// <summary>
-    /// Get user by ID.
-    /// </summary>
+    // -------------------- GET USER BY ID --------------------
+
     [HttpGet("{id:int}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(UserResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<object>> GetUser(int id)
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<UserResponseDto>> GetUser(int id)
     {
         var user = await _context.Users
-            .Include(u => u.Person)
-            .Include(u => u.Role)
-            .Where(u => u.UserId == id)
-            .Select(u => new
+            .AsNoTracking()
+            .Where(u => u.UserId == id && u.ShopId == SHOP_ID)
+            .Select(u => new UserResponseDto
             {
-                u.UserId,
-                u.UserName,
-                u.IsActive,
+                UserId = u.UserId,
+                UserName = u.UserName,
+                IsActive = u.IsActive,
                 Role = u.Role.RoleName,
-                Person = new
-                {
-                    u.Person.FullName,
-                    u.Person.Email,
-                    u.Person.Phone
-                }
+                FullName = u.Person.FullName,
+                Email = u.Person.Email,
+                Phone = u.Person.Phone
             })
             .FirstOrDefaultAsync();
 
@@ -79,15 +75,13 @@ public class UserController : ControllerBase
         return Ok(user);
     }
 
-    /// <summary>
-    /// Create a new user (creates Person + User).
-    /// </summary>
+    // -------------------- CREATE USER --------------------
+
     [HttpPost]
-    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
+    public async Task<IActionResult> CreateUser([FromBody] UserDto dto)
     {
-        // Validate required fields
         if (string.IsNullOrWhiteSpace(dto.UserName) ||
             string.IsNullOrWhiteSpace(dto.Password) ||
             string.IsNullOrWhiteSpace(dto.FullName))
@@ -95,77 +89,69 @@ public class UserController : ControllerBase
             return BadRequest("Username, Password, and FullName are required");
         }
 
-        // Username uniqueness
         if (await _context.Users.AnyAsync(u => u.UserName == dto.UserName))
             return BadRequest("Username already exists");
 
-        using var tx = await _context.Database.BeginTransactionAsync();
+        var roleExists = await _context.Roles
+            .AnyAsync(r => r.RoleId == dto.RoleId);
 
-        try
+        if (!roleExists)
+            return BadRequest("Invalid role");
+
+        var person = new Person
         {
-            // Create person with proper null handling for nullable fields
-            var person = new Person
-            {
-                FullName = dto.FullName,
-                NationalNumber = !string.IsNullOrWhiteSpace(dto.NationalNumber) ? dto.NationalNumber : null,
-                Email = !string.IsNullOrWhiteSpace(dto.Email) ? dto.Email : null,
-                DateOfBirth = dto.DateOfBirth.HasValue ? dto.DateOfBirth.Value : null,
-                CountryId = dto.CountryID.HasValue ? dto.CountryID.Value : null,
-                Gender = !string.IsNullOrWhiteSpace(dto.Gender) ? dto.Gender : null,
-                Phone = !string.IsNullOrWhiteSpace(dto.Phone) ? dto.Phone : null,
-                ImagePath = !string.IsNullOrWhiteSpace(dto.ImagePath) ? dto.ImagePath : null,
-                CreatedAt = DateTime.UtcNow
-            };
+            FullName = dto.FullName,
+            NationalNumber = string.IsNullOrWhiteSpace(dto.NationalNumber) ? null : dto.NationalNumber,
+            Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email,
+            DateOfBirth = dto.DateOfBirth,
+            CountryId = dto.CountryID,
+            Gender = string.IsNullOrWhiteSpace(dto.Gender) ? null : dto.Gender,
+            Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone,
+            ImagePath = string.IsNullOrWhiteSpace(dto.ImagePath) ? null : dto.ImagePath,
+            CreatedAt = DateTime.UtcNow
+        };
 
-            _context.People.Add(person);
-            await _context.SaveChangesAsync();
+        _context.People.Add(person);
+        await _context.SaveChangesAsync();
 
-            // Create user with fixed ShopId = 1
-            var user = new User
-            {
-                PersonId = person.PersonId, // Note: Make sure PersonID property name matches your Person entity
-                UserName = dto.UserName,
-                Password = dto.Password, // TEMP: plaintext (MVP)
-                RoleId = dto.RoleId, // Make sure RoleId is provided in the DTO
-                ShopId = 1, // Fixed to 1 as requested
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
+        var user = new User
+        {
+            PersonId = person.PersonId,
+            UserName = dto.UserName,
+            Password = dto.Password, // still plaintext as requested
+            RoleId = dto.RoleId,
+            ShopId = SHOP_ID,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
 
-            await tx.CommitAsync();
-
-            return CreatedAtAction(nameof(GetUser), new { id = user.UserId }, new
+        return CreatedAtAction(
+            nameof(GetUser),
+            new { id = user.UserId },
+            new
             {
                 user.UserId,
                 user.UserName,
-                PersonId = person.PersonId
+                person.PersonId
             });
-        }
-        catch (Exception ex)
-        {
-            await tx.RollbackAsync();
-            // Log the exception here (ex)
-            return BadRequest("Failed to create user" + ex.Message);
-        }
     }
 
-    /// <summary>
-    /// Soft delete user (set inactive).
-    /// </summary>
-    /// <summary>
-    /// Deactivate user (soft delete).
-    /// </summary>
+    // -------------------- DEACTIVATE USER --------------------
+
     [HttpPut("{id:int}/deactivate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeactivateUser(int id)
     {
-        var user = await _context.Users.FindAsync(id);
-        if (user == null) return NotFound();
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.UserId == id && u.ShopId == SHOP_ID);
+
+        if (user == null)
+            return NotFound();
 
         if (user.UserId == 1)
             return StatusCode(403, "Cannot deactivate the primary admin user");
@@ -176,16 +162,18 @@ public class UserController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>
-    /// Reactivate user.
-    /// </summary>
+    // -------------------- ACTIVATE USER --------------------
+
     [HttpPut("{id:int}/activate")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ActivateUser(int id)
     {
-        var user = await _context.Users.FindAsync(id);
-        if (user == null) return NotFound();
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.UserId == id && u.ShopId == SHOP_ID);
+
+        if (user == null)
+            return NotFound();
 
         user.IsActive = true;
         await _context.SaveChangesAsync();
