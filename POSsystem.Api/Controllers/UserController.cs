@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using POSsystem.Api.Models;
 using POSsystem.Api.DTOs;
+using Microsoft.AspNetCore.Identity;
 
 namespace POSsystem.Api.Controllers;
 
@@ -13,6 +14,7 @@ public class UserController : ControllerBase
 {
     private const int SHOP_ID = 1;
     private readonly PosDbContext _context;
+    private readonly PasswordHasher<User> _passwordHasher = new PasswordHasher<User>();
 
     public UserController(PosDbContext context)
     {
@@ -118,15 +120,18 @@ public class UserController : ControllerBase
         {
             PersonId = person.PersonId,
             UserName = dto.UserName,
-            Password = dto.Password, // still plaintext as requested
             RoleId = dto.RoleId,
             ShopId = SHOP_ID,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
 
+        // Hash password
+        user.Password = _passwordHasher.HashPassword(user, dto.Password);
+
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
+
 
         return CreatedAtAction(
             nameof(GetUser),
