@@ -6,9 +6,15 @@ using POSsystem.Api.Models;
 
 [ApiController]
 [Route("api/sales")]
+[Authorize(Roles = "Admin,Cashier")]
 public class SaleController : ControllerBase
 {
     private readonly PosDbContext _context;
+
+    private const decimal TAX_PERCENT = 15m;
+    private const int SALE_MOVEMENT_TYPE = 1;
+    private const string STATUS_COMPLETED = "Completed";
+    private const string STOCK_REASON_SALE = "Sale";
 
     public SaleController(PosDbContext context)
     {
@@ -19,79 +25,76 @@ public class SaleController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> CreateSale([FromBody] SaleDraftDto draft)
     {
-
+        if (draft == null || draft.Items == null || !draft.Items.Any())
+            return BadRequest("Invalid sale data.");
 
         using var tx = await _context.Database.BeginTransactionAsync();
 
         try
         {
-            const decimal TAX_PERCENT = 15m;
-            const int SALE_MOVEMENT_TYPE = 1;
+            var now = DateTime.UtcNow;
 
-            // 1. Load variants
-            var variantIds = draft.Items.Select(i => i.VariantId).ToList();
+            var variantIds = draft.Items
+                .Select(i => i.VariantId)
+                .Distinct()
+                .ToList();
 
             var variants = await _context.ProductVariants
                 .Where(v => variantIds.Contains(v.VariantId))
                 .ToDictionaryAsync(v => v.VariantId);
 
             if (variants.Count != variantIds.Count)
-                return BadRequest("Invalid product variant.");
+                return BadRequest("Inconsistant product variant.");
 
-            // 2. Validate stock
             foreach (var item in draft.Items)
             {
                 if (variants[item.VariantId].CurrentStock < item.Qty)
                     return BadRequest($"Insufficient stock for {item.Name}");
             }
 
-            // 3. Recalculate totals (server truth)
             var serverSubTotal = draft.Items.Sum(i =>
                 variants[i.VariantId].SellingPrice * i.Qty);
 
             var serverTax = serverSubTotal * TAX_PERCENT / 100;
-            var serverDiscount =
-                serverSubTotal * Math.Min(draft.Totals.DiscountPercentage, 15) / 100;
+
+            var discountPercent = Math.Min(draft.Totals.DiscountPercentage, 15);
+            var serverDiscount = serverSubTotal * discountPercent / 100;
 
             var serverGrandTotal = serverSubTotal + serverTax - serverDiscount;
 
-            // 4. Validate totals (anti-tamper)
             if (Math.Abs(serverGrandTotal - draft.Totals.GrandTotal) > 0.01m)
                 return BadRequest("Totals mismatch.");
 
-            // 5. Validate payment
             if (draft.Payment == null)
                 return BadRequest("Payment is required.");
 
             if (draft.Payment.AmountPaid < serverGrandTotal)
                 return BadRequest("Underpayment not allowed.");
 
-            // Generate invoice number
             var invoiceNumber = await GenerateInvoiceNumber(draft.ShopId);
 
-            // 6. Create Sale
             var sale = new Sale
             {
                 InvoiceNumber = invoiceNumber,
                 ShopId = draft.ShopId,
                 UserId = draft.Cashier.UserId,
-                SaleDate = DateTime.UtcNow,
+                SaleDate = now,
                 SubTotal = serverSubTotal,
                 TaxTotal = serverTax,
                 SaleDiscount = serverDiscount,
                 GrandTotal = serverGrandTotal,
                 CurrencyCode = draft.CurrencyCode,
-                CreatedAt = DateTime.UtcNow,
-                Status = "Completed",
+                CreatedAt = now,
+                Status = STATUS_COMPLETED,
                 Notes = draft.Payment.Notes,
             };
 
             _context.Sales.Add(sale);
             await _context.SaveChangesAsync();
 
-            // 7. SaleItems + StockMovements + Stock update
             foreach (var item in draft.Items)
             {
                 var v = variants[item.VariantId];
@@ -111,7 +114,7 @@ public class SaleController : ControllerBase
                     TaxAmountAtSale = v.SellingPrice * item.Qty * TAX_PERCENT / 100,
                     TotalPriceAtSale = v.SellingPrice * item.Qty,
                     CurrencyCode = draft.CurrencyCode,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = now
                 });
 
                 _context.StockMovements.Add(new StockMovement
@@ -121,16 +124,15 @@ public class SaleController : ControllerBase
                     MovementTypeId = SALE_MOVEMENT_TYPE,
                     QuantityChange = -item.Qty,
                     ReferenceId = sale.SaleId,
-                    Reason = "Sale",
+                    Reason = STOCK_REASON_SALE,
                     CreatedByUserId = draft.Cashier.UserId,
                     CreatedByUsername = draft.Cashier.Username,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = now
                 });
 
                 v.CurrentStock -= item.Qty;
             }
 
-            // 8. Payment
             _context.Payments.Add(new Payment
             {
                 SaleId = sale.SaleId,
@@ -138,8 +140,8 @@ public class SaleController : ControllerBase
                 Change = draft.Payment.Change,
                 CurrencyCode = draft.CurrencyCode,
                 PaymentMethod = draft.Payment.Method,
-                PaymentDate = DateTime.UtcNow,
-                Status = "Completed"
+                PaymentDate = now,
+                Status = STATUS_COMPLETED
             });
 
             await _context.SaveChangesAsync();
@@ -158,7 +160,6 @@ public class SaleController : ControllerBase
         }
     }
 
-    // Helper method
     private async Task<string> GenerateInvoiceNumber(int shopId)
     {
         var lastSale = await _context.Sales

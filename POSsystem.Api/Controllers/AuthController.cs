@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Identity;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -13,73 +14,101 @@ public class AuthController : ControllerBase
 {
     private readonly IConfiguration _config;
     private readonly PosDbContext _context;
+    private readonly PasswordHasher<User> _passwordHasher;
 
     public AuthController(IConfiguration config, PosDbContext context)
     {
         _config = config;
         _context = context;
+        _passwordHasher = new PasswordHasher<User>();
     }
 
-    // POST: api/auth/login
     [HttpPost("login")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<LoginResponseDto>> Login([FromBody] LoginDto loginDto)
     {
-        // 1. Find user (username only)
-        var user = await _context.Users
-            .Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.UserName == loginDto.Username);
-
-        if (user == null)
-            return Unauthorized("Invalid credentials");
-
-        // 2. TEMP: plain password comparison (MVP only)
-        if (user.Password != loginDto.Password)
-            return Unauthorized("Invalid credentials");
-
-        // 3. Check active status
-        if (!user.IsActive)
-            return Unauthorized("Account is inactive");
-
-        // 4. Generate JWT
-        var expiresAt = DateTime.UtcNow.AddMinutes(
-            int.Parse(_config["Jwt:ExpireMinutes"])
-        );
-
-        var token = GenerateJwtToken(user, expiresAt);
-
-        return Ok(new LoginResponseDto
+        if (loginDto == null ||
+            string.IsNullOrWhiteSpace(loginDto.Username) ||
+            string.IsNullOrWhiteSpace(loginDto.Password))
         {
-            Token = token,
-            UserId = user.UserId,
-            Username = user.UserName,
-            Role = user.Role.RoleName,
-            ExpiresAt = expiresAt
-        });
+            return BadRequest("Invalid request data.");
+        }
+
+        try
+        {
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.UserName == loginDto.Username);
+
+            if (user == null)
+                return Unauthorized("Invalid credentials.");
+
+            var result = _passwordHasher.VerifyHashedPassword(
+                user,
+                user.Password,
+                loginDto.Password
+            );
+
+            if (result == PasswordVerificationResult.Failed)
+                return Unauthorized("Invalid credentials.");
+
+            if (!user.IsActive)
+                return Unauthorized("Account is inactive.");
+
+            if (!int.TryParse(_config["Jwt:ExpireMinutes"], out int expireMinutes))
+                return StatusCode(StatusCodes.Status500InternalServerError, "Invalid JWT configuration.");
+
+            var expiresAt = DateTime.UtcNow.AddMinutes(expireMinutes);
+
+            var token = GenerateJwtToken(user, expiresAt);
+
+            return Ok(new LoginResponseDto
+            {
+                Token = token,
+                UserId = user.UserId,
+                Username = user.UserName,
+                Role = user.Role.RoleName,
+                ExpiresAt = expiresAt
+            });
+        }
+        catch
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
+        }
     }
 
     private string GenerateJwtToken(User user, DateTime expiresAt)
     {
-        var claims = new[]
+        var jwtKey = _config["Jwt:Key"];
+        var issuer = _config["Jwt:Issuer"];
+        var audience = _config["Jwt:Audience"];
+
+        if (string.IsNullOrWhiteSpace(jwtKey) ||
+            string.IsNullOrWhiteSpace(issuer) ||
+            string.IsNullOrWhiteSpace(audience))
+        {
+            throw new InvalidOperationException("JWT configuration is missing.");
+        }
+
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
             new Claim(ClaimTypes.Name, user.UserName),
             new Claim(ClaimTypes.Role, user.Role.RoleName)
         };
 
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_config["Jwt:Key"])
-        );
-
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audience"],
+            issuer: issuer,
+            audience: audience,
             claims: claims,
             expires: expiresAt,
-            signingCredentials: creds
+            signingCredentials: credentials
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);

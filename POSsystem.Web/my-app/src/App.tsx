@@ -7,6 +7,7 @@ import Users from "./pages/Users/Users";
 import Cashier from "./pages/Cahier/Cashier";
 import Returns from "./pages/Returns/Returns";
 import StockInPage from "./pages/StockIn/StockInPage";
+import Invoices from "./pages/Invoice/ListInvoices";
 
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
           <Route path="/cashier" element={<Cashier />} />
           <Route path="/returns" element={<Returns />} />
           <Route path="/StockIn" element={<StockInPage />} />
+          <Route path="/Invoices" element={<Invoices />} />
         </Route>
 
         {/* Fallback */}

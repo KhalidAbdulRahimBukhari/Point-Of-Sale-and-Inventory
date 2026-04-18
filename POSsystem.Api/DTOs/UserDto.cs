@@ -2,7 +2,7 @@
 
 namespace POSsystem.Api.DTOs
 {
-    public class CreateUserDto
+    public class UserDto
     {
         // Person - Required fields
         [Required(ErrorMessage = "FullName is required")]
@@ -44,5 +44,22 @@ namespace POSsystem.Api.DTOs
 
         // ShopId is now optional in the DTO since we'll fix it to 1 in the controller
         public int ShopId { get; set; } = 1; // Default to 1 as requested
+    }
+
+    public class UserResponseDto
+    {
+        public int UserId { get; set; }
+
+        public string UserName { get; set; } = string.Empty;
+
+        public bool IsActive { get; set; }
+
+        public string Role { get; set; } = string.Empty;
+
+        public string FullName { get; set; } = string.Empty;
+
+        public string? Email { get; set; }
+
+        public string? Phone { get; set; }
     }
 }

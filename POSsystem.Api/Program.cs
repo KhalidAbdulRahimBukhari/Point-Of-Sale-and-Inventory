@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models; // ? ADD THIS
 using POSsystem.Api.Models;
 using System.Text;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +22,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])
-            )
+            ),
+            RoleClaimType = ClaimTypes.Role
         };
     });
 
@@ -78,7 +80,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVite",
         builder => builder
-            .WithOrigins("http://localhost:5174") // Vite dev server
+            .WithOrigins("http://localhost:5173") // Vite dev server
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials());

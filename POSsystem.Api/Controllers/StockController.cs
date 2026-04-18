@@ -17,13 +17,16 @@ public class ProductsController : ControllerBase
         _context = context;
     }
 
+    // -------------------- GET ALL --------------------
 
     [HttpGet]
+    [ProducesResponseType(typeof(List<ProductResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<ProductResponse>>> GetAll()
     {
         var data = await _context.ProductVariants
-            .Include(v => v.Product)
-            .ThenInclude(p => p.Category)
+            .AsNoTracking()
             .Where(v => v.ShopId == SHOP_ID)
             .Select(v => new ProductResponse
             {
@@ -49,44 +52,39 @@ public class ProductsController : ControllerBase
         return Ok(data);
     }
 
+    // -------------------- GET BY VARIANT --------------------
+
     [HttpGet("{variantId:int}")]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<ProductResponse>> GetByVariantId(int variantId)
     {
         var v = await _context.ProductVariants
             .Include(x => x.Product)
             .ThenInclude(p => p.Category)
+            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.VariantId == variantId && x.ShopId == SHOP_ID);
 
         if (v == null)
             return NotFound();
 
-        return Ok(new ProductResponse
-        {
-            ProductId = v.ProductId,
-            VariantId = v.VariantId,
-            Name = v.Product.Name,
-            Description = v.Product.Description,
-            Brand = v.Product.Brand,
-            ImagePath = v.ImagePath ?? v.Product.ImagePath,
-            Category = v.Product.Category.Name,
-            CategoryId = v.Product.CategoryId,
-            Barcode = v.Barcode,
-            SKU = v.Sku,
-            Size = v.Size,
-            Color = v.Color,
-            SellingPrice = v.SellingPrice,
-            CostPrice = v.CostPrice,
-            CurrentStock = v.CurrentStock
-        });
+        return Ok(MapToResponse(v));
     }
 
+    // -------------------- CREATE --------------------
+
     [HttpPost]
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ProductResponse>> Create(ProductUpsertRequest req)
     {
-        if (!await _context.Categories.AnyAsync(c => c.CategoryId == req.CategoryId && c.ShopId == SHOP_ID))
-            return BadRequest("Invalid category");
+        var category = await _context.Categories
+            .FirstOrDefaultAsync(c => c.CategoryId == req.CategoryId && c.ShopId == SHOP_ID);
 
-        using var tx = await _context.Database.BeginTransactionAsync();
+        if (category == null)
+            return BadRequest("Invalid category");
 
         var product = new Product
         {
@@ -120,47 +118,35 @@ public class ProductsController : ControllerBase
 
         _context.ProductVariants.Add(variant);
         await _context.SaveChangesAsync();
-        await tx.CommitAsync();
 
-        var categoryName = await _context.Categories
-            .Where(c => c.CategoryId == req.CategoryId)
-            .Select(c => c.Name)
-            .FirstAsync();
-
-        return Ok(new ProductResponse
-        {
-            ProductId = product.ProductId,
-            VariantId = variant.VariantId,
-            Name = product.Name,
-            Description = product.Description,
-            Brand = product.Brand,
-            ImagePath = product.ImagePath,
-            Category = categoryName,
-            CategoryId = req.CategoryId,
-            Barcode = variant.Barcode,
-            SKU = variant.Sku,
-            Size = variant.Size,
-            Color = variant.Color,
-            SellingPrice = variant.SellingPrice,
-            CostPrice = variant.CostPrice,
-            CurrentStock = variant.CurrentStock
-        });
+        return CreatedAtAction(
+            nameof(GetByVariantId),
+            new { variantId = variant.VariantId },
+            MapToResponse(variant, product, category.Name)
+        );
     }
 
+    // -------------------- UPDATE --------------------
+
     [HttpPut("{variantId:int}")]
-    public async Task<ActionResult<ProductResponse>> Update(
-    int variantId,
-    ProductUpsertRequest req)
+    [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ProductResponse>> Update(int variantId, ProductUpsertRequest req)
     {
         var v = await _context.ProductVariants
             .Include(x => x.Product)
             .ThenInclude(p => p.Category)
-            .FirstOrDefaultAsync(x =>
-                x.VariantId == variantId &&
-                x.ShopId == SHOP_ID);
+            .FirstOrDefaultAsync(x => x.VariantId == variantId && x.ShopId == SHOP_ID);
 
         if (v == null)
             return NotFound();
+
+        var categoryExists = await _context.Categories
+            .AnyAsync(c => c.CategoryId == req.CategoryId && c.ShopId == SHOP_ID);
+
+        if (!categoryExists)
+            return BadRequest("Invalid category");
 
         // Product
         v.Product.Name = req.Name;
@@ -176,37 +162,24 @@ public class ProductsController : ControllerBase
         v.Color = req.Color;
         v.SellingPrice = req.SellingPrice;
         v.CostPrice = req.CostPrice;
-
-        // Inventory (absolute overwrite — intentional)
         v.CurrentStock = req.CurrentStock;
 
         await _context.SaveChangesAsync();
 
-        return Ok(new ProductResponse
-        {
-            ProductId = v.ProductId,
-            VariantId = v.VariantId,
-            Name = v.Product.Name,
-            Description = v.Product.Description,
-            Brand = v.Product.Brand,
-            ImagePath = v.Product.ImagePath,
-            Category = v.Product.Category.Name,
-            CategoryId = v.Product.CategoryId,
-            Barcode = v.Barcode,
-            SKU = v.Sku,
-            Size = v.Size,
-            Color = v.Color,
-            SellingPrice = v.SellingPrice,
-            CostPrice = v.CostPrice,
-            CurrentStock = v.CurrentStock
-        });
+        return Ok(MapToResponse(v));
     }
 
+    // -------------------- STOCK IN --------------------
+
     [HttpPost("{variantId:int}/stock")]
-    public async Task<IActionResult> StockIn(
-        int variantId,
-        [FromQuery] int quantity)
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> StockIn(int variantId, [FromQuery] int quantity)
     {
+        if (quantity <= 0)
+            return BadRequest("Quantity must be greater than zero");
+
         var v = await _context.ProductVariants
             .FirstOrDefaultAsync(x => x.VariantId == variantId && x.ShopId == SHOP_ID);
 
@@ -214,17 +187,19 @@ public class ProductsController : ControllerBase
             return NotFound();
 
         v.CurrentStock += quantity;
-
-
         await _context.SaveChangesAsync();
+
         return NoContent();
     }
 
+    // -------------------- GET CATEGORIES --------------------
 
     [HttpGet("categories")]
+    [ProducesResponseType(typeof(List<CategoryResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<CategoryResponse>>> GetCategories()
     {
         var categories = await _context.Categories
+            .Where(c => c.ShopId == SHOP_ID)
             .OrderBy(c => c.Name)
             .Select(c => new CategoryResponse
             {
@@ -236,6 +211,32 @@ public class ProductsController : ControllerBase
         return Ok(categories);
     }
 
+    // -------------------- MAPPING --------------------
 
+    private static ProductResponse MapToResponse(
+        ProductVariant v,
+        Product? product = null,
+        string? categoryName = null)
+    {
+        var p = product ?? v.Product;
 
+        return new ProductResponse
+        {
+            ProductId = v.ProductId,
+            VariantId = v.VariantId,
+            Name = p.Name,
+            Description = p.Description,
+            Brand = p.Brand,
+            ImagePath = v.ImagePath ?? p.ImagePath,
+            Category = categoryName ?? p.Category?.Name ?? string.Empty,
+            CategoryId = p.CategoryId,
+            Barcode = v.Barcode,
+            SKU = v.Sku,
+            Size = v.Size,
+            Color = v.Color,
+            SellingPrice = v.SellingPrice,
+            CostPrice = v.CostPrice,
+            CurrentStock = v.CurrentStock
+        };
+    }
 }
