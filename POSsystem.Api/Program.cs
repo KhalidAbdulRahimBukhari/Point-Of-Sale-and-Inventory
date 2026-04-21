@@ -80,7 +80,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVite",
         builder => builder
-            .WithOrigins("http://localhost:5173") // Vite dev server
+            .WithOrigins(
+                "http://localhost:5173",           // Local development
+                "https://point-of-sale-and-inventory.vercel.app"      // Production Vercel URL
+            )
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials());
