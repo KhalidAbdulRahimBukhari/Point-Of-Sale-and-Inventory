@@ -58,7 +58,7 @@ export default function ExpensesChart() {
                   borderRadius: 8,
                   boxShadow: theme.shadows[3],
                 }}
-                formatter={(value: number) => [`$${value.toLocaleString()}`, "Amount"]}
+                formatter={(value: number | undefined) => [`$${value?.toLocaleString() ?? "N/A"}`, "Amount"]}
               />
               <Bar
                 dataKey="amount"

@@ -62,7 +62,7 @@ export default function RevenueChart() {
                   borderRadius: 8,
                   boxShadow: theme.shadows[3],
                 }}
-                formatter={(value: number) => [`$${value.toLocaleString()}`, undefined]}
+                formatter={(value: number | undefined) => value !== undefined ? [`$${value.toLocaleString()}`, undefined] : ['', undefined]}
               />
               <Legend
                 wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
