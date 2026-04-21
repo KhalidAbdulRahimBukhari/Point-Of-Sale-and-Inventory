@@ -52,8 +52,8 @@ export default function SalesByCategoryChart() {
                   borderRadius: 8,
                   boxShadow: theme.shadows[3],
                 }}
-                formatter={(value: number) => [
-                  `$${value.toLocaleString()} (${((value / total) * 100).toFixed(1)}%)`,
+                formatter={(value: number | undefined) => [
+                  value !== undefined ? `$${value.toLocaleString()} (${((value / total) * 100).toFixed(1)}%)` : '',
                   undefined,
                 ]}
               />

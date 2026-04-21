@@ -51,8 +51,8 @@ export default function HourlySalesChart() {
                   borderRadius: 8,
                   boxShadow: theme.shadows[3],
                 }}
-                formatter={(value: number, name: string) => [
-                  name === "sales" ? `$${value.toLocaleString()}` : value,
+                formatter={(value: number | undefined, name: string | undefined) => [
+                  name === "sales" ? `$${value?.toLocaleString() ?? "N/A"}` : value,
                   name === "sales" ? "Revenue" : "Transactions",
                 ]}
               />
