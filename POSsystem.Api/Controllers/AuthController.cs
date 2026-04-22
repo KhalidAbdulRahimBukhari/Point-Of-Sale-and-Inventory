@@ -74,9 +74,14 @@ public class AuthController : ControllerBase
                 ExpiresAt = expiresAt
             });
         }
-        catch
+        catch (Exception ex)
         {
-            return StatusCode(StatusCodes.Status500InternalServerError, "An unexpected error occurred.");
+            return StatusCode(500, new
+            {
+                error = ex.Message,
+                inner = ex.InnerException?.Message,
+                stack = ex.StackTrace
+            });
         }
     }
 
