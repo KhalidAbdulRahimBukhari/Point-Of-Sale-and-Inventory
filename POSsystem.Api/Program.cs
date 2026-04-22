@@ -101,7 +101,7 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger"; // Access at /swagger
 });
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection(); Railway may have a problem with it 
 
 // ?? IMPORTANT ORDER: Authentication before Authorization
 app.UseAuthentication(); // MUST come first
