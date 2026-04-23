@@ -73,7 +73,9 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddDbContext<PosDbContext>(options =>
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("PosDb")));
+        builder.Configuration.GetConnectionString("PosDb"),
+        o => o.EnableRetryOnFailure(0)
+    ));
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -92,6 +94,8 @@ builder.Services.AddCors(options =>
 // Add to middleware (BEFORE UseAuthorization)
 
 var app = builder.Build();
+
+
 
 app.UseCors("AllowVite");
 app.UseSwagger();
