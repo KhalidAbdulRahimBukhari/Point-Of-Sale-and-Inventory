@@ -29,7 +29,11 @@ public class UserController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<List<UserResponseDto>>> GetUsers()
     {
-        var users = await _context.Users
+        List<UserResponseDto> users;
+
+        try
+        {
+             users = await _context.Users
             .AsNoTracking()
             .Where(u => u.ShopId == SHOP_ID)
             .Select(u => new UserResponseDto
@@ -43,6 +47,17 @@ public class UserController : ControllerBase
                 Phone = u.Person.Phone
             })
             .ToListAsync();
+        }
+        
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                error = ex.Message,
+                inner = ex.InnerException?.Message,
+                stack = ex.StackTrace
+            });
+        }
 
         return Ok(users);
     }

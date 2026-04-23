@@ -23,33 +23,46 @@ public class ProductsController : ControllerBase
     [ProducesResponseType(typeof(List<ProductResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<List<ProductResponse>>> GetAll()
     {
-        var data = await _context.ProductVariants
-            .AsNoTracking()
-            .Where(v => v.ShopId == SHOP_ID)
-            .Select(v => new ProductResponse
-            {
-                ProductId = v.ProductId,
-                VariantId = v.VariantId,
-                Name = v.Product.Name,
-                Description = v.Product.Description,
-                Brand = v.Product.Brand,
-                ImagePath = v.ImagePath ?? v.Product.ImagePath,
-                Category = v.Product.Category.Name,
-                CategoryId = v.Product.CategoryId,
-                Barcode = v.Barcode,
-                SKU = v.Sku,
-                Size = v.Size,
-                Color = v.Color,
-                SellingPrice = v.SellingPrice,
-                CostPrice = v.CostPrice,
-                CurrentStock = v.CurrentStock
-            })
-            .OrderBy(p => p.Name)
-            .ToListAsync();
+        try
+        {
+            var data = await _context.ProductVariants
+                .AsNoTracking()
+                .Where(v => v.ShopId == SHOP_ID)
+                .Select(v => new ProductResponse
+                {
+                    ProductId = v.ProductId,
+                    VariantId = v.VariantId,
+                    Name = v.Product.Name,
+                    Description = v.Product.Description,
+                    Brand = v.Product.Brand,
+                    ImagePath = v.ImagePath ?? v.Product.ImagePath,
+                    Category = v.Product.Category.Name,
+                    CategoryId = v.Product.CategoryId,
+                    Barcode = v.Barcode,
+                    SKU = v.Sku,
+                    Size = v.Size,
+                    Color = v.Color,
+                    SellingPrice = v.SellingPrice,
+                    CostPrice = v.CostPrice,
+                    CurrentStock = v.CurrentStock
+                })
+                .OrderBy(p => p.Name)
+                .ToListAsync();
 
-        return Ok(data);
+            return Ok(data);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                message = ex.Message,
+                inner = ex.InnerException?.Message,
+                stack = ex.StackTrace
+            });
+        }
     }
 
     // -------------------- GET BY VARIANT --------------------
