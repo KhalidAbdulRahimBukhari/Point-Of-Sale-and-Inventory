@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import DashboardLayout from "./layout/DashboardLayout";
+import { Analytics } from "@vercel/analytics/react";
 // Pages
 import LoginPage from "./pages/auth/Login";
 import Dashboard from "./pages/Dashbaord/Dashboard";
@@ -11,24 +12,28 @@ import Invoices from "./pages/Invoice/ListInvoices";
 
 function App() {
   return (
-    <Routes>
-      {/* Public */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<LoginPage />} />
+    <div>
+      <Routes>
+        {/* Public */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<LoginPage />} />
 
-      {/* Dashboard Layout */}
-      <Route element={<DashboardLayout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/users" element={<Users />} />
-        <Route path="/cashier" element={<Cashier />} />
-        <Route path="/returns" element={<Returns />} />
-        <Route path="/StockIn" element={<StockInPage />} />
-        <Route path="/Invoices" element={<Invoices />} />
-      </Route>
+        {/* Dashboard Layout */}
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/cashier" element={<Cashier />} />
+          <Route path="/returns" element={<Returns />} />
+          <Route path="/StockIn" element={<StockInPage />} />
+          <Route path="/Invoices" element={<Invoices />} />
+        </Route>
 
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+
+      <Analytics />
+    </div>
   );
 }
 
