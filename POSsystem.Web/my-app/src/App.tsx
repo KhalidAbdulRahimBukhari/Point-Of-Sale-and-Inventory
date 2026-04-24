@@ -9,29 +9,26 @@ import Returns from "./pages/Returns/Returns";
 import StockInPage from "./pages/StockIn/StockInPage";
 import Invoices from "./pages/Invoice/ListInvoices";
 
-
 function App() {
   return (
+    <Routes>
+      {/* Public */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<LoginPage />} />
 
-      <Routes>
-        {/* Public */}
-        <Route path="/login" element={<LoginPage />} />
+      {/* Dashboard Layout */}
+      <Route element={<DashboardLayout />}>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/users" element={<Users />} />
+        <Route path="/cashier" element={<Cashier />} />
+        <Route path="/returns" element={<Returns />} />
+        <Route path="/StockIn" element={<StockInPage />} />
+        <Route path="/Invoices" element={<Invoices />} />
+      </Route>
 
-        {/* Dashboard Layout */}
-        <Route element={<DashboardLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/cashier" element={<Cashier />} />
-          <Route path="/returns" element={<Returns />} />
-          <Route path="/StockIn" element={<StockInPage />} />
-          <Route path="/Invoices" element={<Invoices />} />
-        </Route>
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
   );
 }
 
