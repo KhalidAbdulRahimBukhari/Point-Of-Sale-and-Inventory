@@ -14,8 +14,8 @@ export function useLogin() {
   };
 
   const [form, setForm] = useState<LoginForm>({
-    username: "",
-    password: "",
+    username: "admin", // for demo purposes only, should be removed in production
+    password: "0000", // for demo purposes only, should be removed in production
     rememberMe: false,
     showPassword: false,
   });
